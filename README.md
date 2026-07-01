@@ -4,6 +4,8 @@
 
 Everything runs locally in your browser. **No server, no tracking, no CDN, no dependencies.** It's a single self-contained `index.html`.
 
+**[Live demo →](https://atahan99.github.io/NeonSig/)**
+
 <p align="center">
   <img src="screenshots/hero.png" alt="NeonSig home screen" width="800" />
 </p>
