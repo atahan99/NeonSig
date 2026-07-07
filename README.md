@@ -12,7 +12,7 @@ Everything runs locally in your browser. **No server, no tracking, no CDN, no de
 
 ## Why
 
-A file's extension and the browser-reported MIME type are just *claims*. A `.png` can secretly be a PDF; a `.pdf` can be a Windows executable. NeonSig reads the leading (and, when needed, trailing) bytes of a file, matches them against known signatures and container structures, and tells you what the file **really** is — while being honest about uncertainty.
+A file's extension and the browser-reported MIME type are just *claims*. A `.png` can secretly be a PDF; a `.pdf` can be a Windows executable. NeonSig reads the leading bytes of a file (up to a 16 KB header window), matches them against known signatures and container structures, and tells you what the file **really** is — while being honest about uncertainty.
 
 ## Features
 
@@ -67,7 +67,7 @@ Drag files onto the drop zone (or click **Select files**). Each file is analyzed
 
 ```mermaid
 flowchart TD
-    input["Drop zone / file picker"] --> read["Read header (16KB) + footer (64KB, on demand)"]
+    input["Drop zone / file picker"] --> read["Read header (16KB window)"]
     read --> engine["Signature matching engine"]
     engine --> refine["Container refiners: ZIP / ISO-BMFF / RIFF / EBML / PE"]
     refine --> text["Text heuristics (if no binary match)"]
@@ -75,7 +75,7 @@ flowchart TD
     cmp --> render["Result card + hex preview + summary"]
 ```
 
-1. Only a bounded window of bytes is read via `Blob.slice().arrayBuffer()` (with a `FileReader` fallback), so huge files are handled without loading them fully.
+1. Only a bounded header window is read via `Blob.slice().arrayBuffer()`, so huge files are handled without loading them fully.
 2. A local signature registry matches magic numbers at defined offsets (with optional bitmasks for variable fields).
 3. Container refiners inspect internal structure to narrow broad matches to specific subtypes.
 4. When nothing binary matches, conservative text heuristics classify text formats (SVG, HTML, XML, JSON, CSV, Markdown, plain text) at low confidence.

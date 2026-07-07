@@ -18,13 +18,24 @@
     --text: #d6f7ff;
     --text-dim: #7a8aa0;
     --border: rgba(0, 240, 255, 0.25);
+    --glow-cyan: rgba(0, 240, 255, 0.08);
+    --glow-cyan-inset: rgba(0, 240, 255, 0.03);
+    --glow-cyan-hover: rgba(0, 240, 255, 0.2);
+    --glow-cyan-soft: rgba(0, 240, 255, 0.06);
+    --glow-green: rgba(57, 255, 20, 0.08);
+    --glow-green-strong: rgba(57, 255, 20, 0.3);
+    --glow-magenta-drag: rgba(255, 43, 214, 0.35);
+    --btn-accent: var(--cyan);
     --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
 
   * { box-sizing: border-box; }
 
-  html, body { margin: 0; padding: 0; }
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
 
   body {
     background:
@@ -77,7 +88,7 @@
     border-radius: 10px;
     padding: 1rem 1.25rem;
     margin-bottom: 1.25rem;
-    box-shadow: 0 0 18px rgba(0, 240, 255, 0.08), inset 0 0 30px rgba(0, 240, 255, 0.03);
+    box-shadow: 0 0 18px var(--glow-cyan), inset 0 0 30px var(--glow-cyan-inset);
   }
 
   .notice {
@@ -87,7 +98,7 @@
     font-size: 0.9rem;
     color: var(--green);
     border-color: rgba(57, 255, 20, 0.3);
-    box-shadow: 0 0 18px rgba(57, 255, 20, 0.08);
+    box-shadow: 0 0 18px var(--glow-green);
   }
   .notice .dot {
     width: 10px; height: 10px; border-radius: 50%;
@@ -106,11 +117,11 @@
     transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
     background: rgba(0, 240, 255, 0.02);
   }
-  .drop:hover, .drop:focus-visible { outline: none; border-color: var(--cyan); box-shadow: 0 0 24px rgba(0, 240, 255, 0.2); }
+  .drop:hover, .drop:focus-visible { outline: none; border-color: var(--cyan); box-shadow: 0 0 24px var(--glow-cyan-hover); }
   .drop.drag {
     border-color: var(--magenta);
     background: rgba(255, 43, 214, 0.08);
-    box-shadow: 0 0 34px rgba(255, 43, 214, 0.35);
+    box-shadow: 0 0 34px var(--glow-magenta-drag);
   }
   .drop h2 {
     margin: 0 0 0.35rem;
@@ -133,17 +144,16 @@
     font-size: 0.85rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    color: var(--cyan);
+    color: var(--btn-accent);
     background: transparent;
-    border: 1px solid var(--cyan);
+    border: 1px solid var(--btn-accent);
     border-radius: 8px;
     padding: 0.6rem 1.1rem;
     cursor: pointer;
     transition: all 0.18s;
   }
-  .btn:hover { background: var(--cyan); color: var(--bg); box-shadow: 0 0 18px var(--cyan); }
-  .btn.magenta { color: var(--magenta); border-color: var(--magenta); }
-  .btn.magenta:hover { background: var(--magenta); color: var(--bg); box-shadow: 0 0 18px var(--magenta); }
+  .btn:hover { background: var(--btn-accent); color: var(--bg); box-shadow: 0 0 18px var(--btn-accent); }
+  .btn.magenta { --btn-accent: var(--magenta); }
   .btn:disabled { opacity: 0.4; cursor: not-allowed; box-shadow: none; background: transparent; color: var(--text-dim); border-color: var(--text-dim); }
 
   /* ---------- Summary ---------- */
@@ -171,7 +181,7 @@
     border-left-width: 4px;
     border-radius: 10px;
     padding: 1rem 1.25rem;
-    box-shadow: 0 0 16px rgba(0, 240, 255, 0.06);
+    box-shadow: 0 0 16px var(--glow-cyan-soft);
     animation: rise 0.25s ease;
   }
   @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -274,7 +284,7 @@
     font-family: var(--mono);
     padding: 0.7rem 1.4rem;
     border-radius: 8px;
-    box-shadow: 0 0 20px rgba(57,255,20,0.3);
+    box-shadow: 0 0 20px var(--glow-green-strong);
     transition: transform 0.3s ease, opacity 0.3s ease, visibility 0.3s ease;
     z-index: 50;
   }
@@ -353,20 +363,10 @@
 <script>
 "use strict";
 
-/* =========================================================================
- * CONSTANTS
- * ========================================================================= */
-const MAX_HEADER_BYTES = 16 * 1024;   // 16 KB header window for signatures
-const MAX_FOOTER_BYTES = 64 * 1024;   // 64 KB footer window (only read on demand)
-const HEX_PREVIEW_BYTES = 128;        // bytes shown in the hex dump
-const BIG_FILE_BYTES = 200 * 1024 * 1024; // "huge" threshold used only for a notice
+const MAX_HEADER_BYTES = 16 * 1024;
+const HEX_PREVIEW_BYTES = 128;
+const BIG_FILE_BYTES = 200 * 1024 * 1024;
 
-/* =========================================================================
- * UTILITY HELPERS
- * All helpers operate on Uint8Array views of the header/footer slices.
- * ========================================================================= */
-
-// Parse a hex string like "89 50 4E 47" or "89504e47" into an array of bytes.
 function hexToBytes(hexPattern) {
   const clean = hexPattern.replace(/\s+/g, "");
   const out = [];
@@ -376,25 +376,15 @@ function hexToBytes(hexPattern) {
   return out;
 }
 
-// True if `bytes` starts with the given hex pattern at `offset`.
-function bytesStartWith(bytes, hexPattern, offset = 0) {
-  return bytesMatchAt(bytes, hexToBytes(hexPattern), offset);
-}
-
-// Match a byte array `pattern` at `offset`. `mask` (optional) is an array of
-// bytes AND-ed with both sides before comparison, so `0x00` mask bytes act as
-// wildcards. This supports signatures with variable bits (e.g. MP3 frame sync).
-function bytesMatchAt(bytes, pattern, offset = 0, mask = null) {
+function bytesMatchAt(bytes, pattern, offset = 0) {
   if (!bytes || offset < 0) return false;
   if (offset + pattern.length > bytes.length) return false;
   for (let i = 0; i < pattern.length; i++) {
-    const m = mask ? mask[i] : 0xff;
-    if ((bytes[offset + i] & m) !== (pattern[i] & m)) return false;
+    if (bytes[offset + i] !== pattern[i]) return false;
   }
   return true;
 }
 
-// Read `length` bytes at `offset` as a Latin-1/ASCII string.
 function asciiAt(bytes, offset, length) {
   if (!bytes || offset < 0 || offset >= bytes.length) return "";
   let s = "";
@@ -403,17 +393,11 @@ function asciiAt(bytes, offset, length) {
   return s;
 }
 
-// True if the ASCII text appears anywhere within the byte window.
-function containsAscii(bytes, text) {
-  return indexOfAscii(bytes, text) !== -1;
-}
-
-// Return the offset of an ASCII substring within bytes, or -1.
-function indexOfAscii(bytes, text, from = 0) {
+function indexOfAscii(bytes, text) {
   if (!bytes || !text) return -1;
   const first = text.charCodeAt(0);
   const limit = bytes.length - text.length;
-  for (let i = Math.max(0, from); i <= limit; i++) {
+  for (let i = 0; i <= limit; i++) {
     if (bytes[i] !== first) continue;
     let ok = true;
     for (let j = 1; j < text.length; j++) {
@@ -424,38 +408,19 @@ function indexOfAscii(bytes, text, from = 0) {
   return -1;
 }
 
-// Uppercase hex dump of up to `limit` bytes, space-separated.
-function toHex(bytes, limit = HEX_PREVIEW_BYTES) {
-  const end = Math.min(bytes.length, limit);
-  const parts = [];
-  for (let i = 0; i < end; i++) {
-    parts.push(bytes[i].toString(16).padStart(2, "0").toUpperCase());
-  }
-  return parts.join(" ");
-}
-
-// Extension WITHOUT the dot, lowercased, or "" if none. Handles trailing dots.
 function getExtension(filename) {
   const name = String(filename || "");
   const dot = name.lastIndexOf(".");
   if (dot <= 0 || dot === name.length - 1) return "";
-  return normalizeExtension(name.slice(dot + 1));
+  return name.slice(dot + 1).trim().replace(/^\./, "").toLowerCase();
 }
 
-// Normalize an extension: strip leading dot, trim, lowercase.
-function normalizeExtension(ext) {
-  return String(ext || "").trim().replace(/^\./, "").toLowerCase();
-}
-
-// Compare the extensions a detected type accepts against the file's actual
-// extension. Returns "match" | "mismatch" (caller decides ambiguous/unknown).
 function compareExtension(detectedExtensions, actualExt) {
   if (!detectedExtensions || detectedExtensions.length === 0) return "unknown";
   if (!actualExt) return "mismatch";
   return detectedExtensions.includes(actualExt) ? "match" : "mismatch";
 }
 
-// Escape text for safe insertion into HTML.
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
@@ -465,7 +430,6 @@ function escapeHtml(str) {
     .replace(/'/g, "&#39;");
 }
 
-// Human readable byte size.
 function formatSize(bytes) {
   if (bytes === 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -474,15 +438,7 @@ function formatSize(bytes) {
   return (i === 0 ? val : val.toFixed(2)) + " " + units[i];
 }
 
-/* =========================================================================
- * SIGNATURE REGISTRY
- * Each entry: { id, label, mime, extensions, patterns, offset, mask?,
- *               test?(bytes,file), confidence, notes }
- * `patterns` is an array of hex strings; ANY match at `offset` counts.
- * `test` (optional) is a custom predicate returning boolean or an object
- * { matched, offset, signature } for richer reporting.
- * confidence: "high" | "medium" | "low"
- * ========================================================================= */
+// Signature registry: { id, label, mime, extensions, patterns, offset, confidence, notes }
 const SIGNATURES = [
   /* ---------------- Images ---------------- */
   { id: "png", label: "PNG image", mime: "image/png", extensions: ["png"],
@@ -520,8 +476,7 @@ const SIGNATURES = [
     notes: "Compound File Binary; DOC/XLS/PPT and others share this container." },
 
   /* ---------------- Archives / compressed ---------------- */
-  { id: "zip", label: "ZIP archive", mime: "application/zip",
-    extensions: ["zip", "jar", "apk", "docx", "xlsx", "pptx", "odt", "ods", "odp", "epub"],
+  { id: "zip", label: "ZIP archive", mime: "application/zip", extensions: ["zip"],
     patterns: ["50 4B 03 04", "50 4B 05 06", "50 4B 07 08"], offset: 0, confidence: "high",
     notes: "ZIP local/central/spanned header. Refined by inspecting entries." },
   { id: "rar4", label: "RAR archive (v4)", mime: "application/vnd.rar", extensions: ["rar"],
@@ -607,80 +562,44 @@ const SIGNATURES = [
     patterns: ["4F 54 54 4F"], offset: 0, confidence: "high", notes: "'OTTO' header." }
 ];
 
-/* Detected-type id -> accepted extensions (authoritative comparison map).
- * Container/broad ids are marked ambiguous so we do not cry "mismatch"
- * when we genuinely cannot narrow the subtype. */
-const TYPE_EXTENSIONS = {
-  png: ["png"], jpeg: ["jpg", "jpeg", "jpe", "jfif"], gif: ["gif"], bmp: ["bmp", "dib"],
-  tiff: ["tif", "tiff"], webp: ["webp"], ico: ["ico"], cur: ["cur"], svg: ["svg"],
-  avif: ["avif"], heic: ["heic", "heif"],
-  pdf: ["pdf"], rtf: ["rtf"], ole: ["doc", "xls", "ppt", "msg", "msi"],
+// Extension lists for refined-only type ids (base types use SIGNATURES[].extensions).
+const REFINED_EXTENSIONS = {
+  webp: ["webp"], svg: ["svg"], avif: ["avif"], heic: ["heic", "heif"],
   docx: ["docx"], xlsx: ["xlsx"], pptx: ["pptx"],
   odt: ["odt"], ods: ["ods"], odp: ["odp"], epub: ["epub"],
-  zip: ["zip"], jar: ["jar"], apk: ["apk"],
-  rar4: ["rar"], rar5: ["rar"], sevenzip: ["7z"], gzip: ["gz", "tgz"], bzip2: ["bz2"],
-  xz: ["xz"], tar: ["tar"],
-  mp3id3: ["mp3"], mp3frame: ["mp3"], flac: ["flac"], ogg: ["ogg", "oga", "ogv", "opus"],
-  midi: ["mid", "midi"], wav: ["wav"], m4a: ["m4a", "m4b", "aac"],
-  mp4: ["mp4", "m4v", "mov", "3gp", "3g2"], avi: ["avi"], webm: ["webm"], mkv: ["mkv"],
-  mpeg: ["mpg", "mpeg"],
+  jar: ["jar"], apk: ["apk"],
+  wav: ["wav"], m4a: ["m4a", "m4b", "aac"],
+  mp4: ["mp4", "m4v", "mov", "3gp", "3g2"], avi: ["avi"],
+  webm: ["webm"], mkv: ["mkv"],
   exe: ["exe", "scr", "com"], dll: ["dll", "ocx"], sys: ["sys"],
-  pe: ["exe", "dll", "sys", "scr", "com", "ocx"],
-  elf: ["elf", "so", "o", "out", "bin", "ko"], macho: ["dylib", "o", "bundle"],
-  machofat: ["dylib", "o"], javaclass: ["class"], wasm: ["wasm"],
-  sqlite: ["sqlite", "sqlite3", "db"],
-  woff: ["woff"], woff2: ["woff2"], ttf: ["ttf"], otf: ["otf"],
-  txt: ["txt", "text", "log"], csv: ["csv", "tsv"], json: ["json"], xml: ["xml"],
-  html: ["html", "htm"], markdown: ["md", "markdown"]
+  txt: ["txt", "text", "log"], csv: ["csv", "tsv"], json: ["json"],
+  xml: ["xml"], html: ["html", "htm"], markdown: ["md", "markdown"]
 };
 
-/* Ids that are inherently broad: even when detected, the extension can vary,
- * so a non-matching extension should read as AMBIGUOUS rather than MISMATCH. */
+for (const sig of SIGNATURES) {
+  sig._patterns = sig.patterns.map((pat) => {
+    const bytes = hexToBytes(pat);
+    return { bytes, label: pat.replace(/\s+/g, " ").trim().toUpperCase(), len: bytes.length };
+  });
+}
+const SIG_BY_ID = Object.fromEntries(SIGNATURES.map((s) => [s.id, s]));
+
 const BROAD_IDS = new Set([
   "zip", "riff", "isobmff", "ebml", "ole", "pe", "machofat", "ttf",
   "txt", "csv", "json", "xml", "html", "markdown", "mp3frame", "ogg", "mpeg"
 ]);
 
-/* =========================================================================
- * FILE READING
- * Read only the bytes we need. Prefer Blob.slice().arrayBuffer(); fall back
- * to FileReader for older engines. Never load a whole huge file.
- * ========================================================================= */
-
-// Read a byte range [start, end) of a File/Blob as a Uint8Array.
 async function readSlice(file, start, end) {
   const clampedStart = Math.max(0, Math.min(start, file.size));
   const clampedEnd = Math.max(clampedStart, Math.min(end, file.size));
-  const blob = file.slice(clampedStart, clampedEnd);
-
-  // Modern path: Blob.arrayBuffer()
-  if (typeof blob.arrayBuffer === "function") {
-    const buf = await blob.arrayBuffer();
-    return new Uint8Array(buf);
-  }
-
-  // Fallback path: FileReader.readAsArrayBuffer
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(new Uint8Array(reader.result));
-    reader.onerror = () => reject(reader.error || new Error("FileReader failed"));
-    reader.readAsArrayBuffer(blob);
-  });
+  const buf = await file.slice(clampedStart, clampedEnd).arrayBuffer();
+  return new Uint8Array(buf);
 }
 
-// Read the leading header window (bounded by file size).
 function readHeader(file) {
   return readSlice(file, 0, MAX_HEADER_BYTES);
 }
 
-// Read the trailing footer window, only invoked when a detector needs it.
-function readFooter(file) {
-  return readSlice(file, Math.max(0, file.size - MAX_FOOTER_BYTES), file.size);
-}
-
-/* =========================================================================
- * NUMERIC READERS
- * ========================================================================= */
 function readUint16LE(b, o) { return b[o] | (b[o + 1] << 8); }
 function readUint32LE(b, o) { return (b[o] | (b[o + 1] << 8) | (b[o + 2] << 16) | (b[o + 3] << 24)) >>> 0; }
 function readUint32BE(b, o) { return ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0; }
@@ -688,37 +607,33 @@ function readUint16BE(b, o) { return (b[o] << 8) | b[o + 1]; }
 
 function confidenceRank(c) { return c === "high" ? 3 : c === "medium" ? 2 : 1; }
 
-// Extensions used for the authoritative comparison of a detected id.
-function acceptedExtensions(id, fallback) {
-  return TYPE_EXTENSIONS[id] || fallback || [];
+function acceptedExtensions(id) {
+  if (!id) return [];
+  if (REFINED_EXTENSIONS[id]) return REFINED_EXTENSIONS[id];
+  const sig = SIG_BY_ID[id];
+  return sig ? sig.extensions : [];
 }
 
-/* =========================================================================
- * SIGNATURE MATCHING ENGINE
- * ========================================================================= */
-function matchSignatures(bytes, file) {
+function matchSignatures(bytes) {
   const matches = [];
   for (const sig of SIGNATURES) {
     let matchedHex = null;
-    for (const pat of sig.patterns) {
-      const patBytes = hexToBytes(pat);
-      if (bytesMatchAt(bytes, patBytes, sig.offset, sig.mask ? hexToBytes(sig.mask) : null)) {
-        matchedHex = pat.replace(/\s+/g, " ").trim().toUpperCase();
+    let patternLength = 0;
+    for (const pat of sig._patterns) {
+      if (bytesMatchAt(bytes, pat.bytes, sig.offset)) {
+        matchedHex = pat.label;
+        patternLength = pat.len;
         break;
       }
-    }
-    if (matchedHex === null && typeof sig.test === "function") {
-      if (sig.test(bytes, file)) matchedHex = "(custom test)";
     }
     if (matchedHex !== null) {
       matches.push({
         id: sig.id, label: sig.label, mime: sig.mime,
-        extensions: sig.extensions, confidence: sig.confidence, notes: sig.notes,
-        signature: matchedHex, offset: sig.offset, patternLength: hexToBytes(sig.patterns[0]).length
+        confidence: sig.confidence, notes: sig.notes,
+        signature: matchedHex, offset: sig.offset, patternLength
       });
     }
   }
-  // Best first: higher confidence, then longer/rarer signature, then earlier offset.
   matches.sort((a, b) => {
     const c = confidenceRank(b.confidence) - confidenceRank(a.confidence);
     if (c !== 0) return c;
@@ -728,9 +643,7 @@ function matchSignatures(bytes, file) {
   return matches;
 }
 
-/* =========================================================================
- * CONTAINER REFINERS
- * ========================================================================= */
+// Container refiners
 
 // Scan for ZIP local file headers ("PK\x03\x04") within the window and pull
 // out entry filenames. Validation keeps false positives (from compressed
@@ -742,14 +655,11 @@ function scanZipLocalEntries(bytes) {
     if (!bytesMatchAt(bytes, sig, i)) continue;
     const fnLen = readUint16LE(bytes, i + 26);
     const extraLen = readUint16LE(bytes, i + 28);
-    const method = readUint16LE(bytes, i + 8);
-    const compSize = readUint32LE(bytes, i + 18);
     if (fnLen === 0 || fnLen > 512) continue;
     if (i + 30 + fnLen > bytes.length) continue;
     const name = asciiAt(bytes, i + 30, fnLen);
-    // Validate: printable path-like characters only.
     if (!/^[\x20-\x7e]+$/.test(name)) continue;
-    entries.push({ name, headerOffset: i, dataOffset: i + 30 + fnLen + extraLen, method, compSize });
+    entries.push({ name, dataOffset: i + 30 + fnLen + extraLen });
     if (entries.length > 200) break;
   }
   return entries;
@@ -791,12 +701,11 @@ function refineZip(bytes) {
   if (has("META-INF/MANIFEST.MF"))
     return refined("jar", "Java archive (JAR)", "application/java-archive", "contains META-INF/MANIFEST.MF");
 
-  // Generic ZIP: stay ambiguous but attach any evidence we found.
-  const evidence = names.length ? ("entries: " + names.slice(0, 4).join(", ")) : "no readable entries in header window";
-  return refined("zip", "ZIP archive", "application/zip", evidence, "medium");
+  const noteList = names.length ? ("entries: " + names.slice(0, 4).join(", ")) : "no readable entries in header window";
+  return refined("zip", "ZIP archive", "application/zip", noteList, "medium");
 
-  function refined(id, label, mime, evidence, confidence) {
-    return { id, label, mime, confidence: confidence || "high", evidence,
+  function refined(id, label, mime, notes, confidence) {
+    return { id, label, mime, confidence: confidence || "high", notes,
              signature: "50 4B 03 04", offset: 0 };
   }
 }
@@ -810,7 +719,7 @@ function refineIsoBmff(bytes) {
   const any = (list) => list.some((b) => set.includes(b));
   const brand = set[0] || "";
   const make = (id, label, mime) => ({ id, label, mime, confidence: "high",
-    evidence: "ftyp brand: " + set.filter(Boolean).slice(0, 4).join(", "), signature: "66 74 79 70", offset: 4 });
+    notes: "ftyp brand: " + set.filter(Boolean).slice(0, 4).join(", "), signature: "66 74 79 70", offset: 4 });
 
   if (any(["avif", "avis"])) return make("avif", "AVIF image", "image/avif");
   if (any(["heic", "heix", "hevc", "hevx", "heif", "mif1", "msf1"])) return make("heic", "HEIC/HEIF image", "image/heic");
@@ -820,69 +729,59 @@ function refineIsoBmff(bytes) {
     return make("mp4", "MP4/QuickTime video (ISO BMFF)", "video/mp4");
   // Unknown brand: still ISO BMFF, keep broad.
   return { id: "mp4", label: "ISO BMFF media (brand '" + brand + "')", mime: "video/mp4",
-    confidence: "medium", evidence: "ftyp brand: " + brand, signature: "66 74 79 70", offset: 4 };
+    confidence: "medium", notes: "ftyp brand: " + brand, signature: "66 74 79 70", offset: 4 };
 }
 
 // RIFF: bytes 8-11 hold the form type.
 function refineRiff(bytes) {
   const form = asciiAt(bytes, 8, 4).trim().toUpperCase();
-  const base = { evidence: "RIFF form: " + (form || "?"), signature: "52 49 46 46", offset: 0, confidence: "high" };
-  if (form === "WAVE") return Object.assign({ id: "wav", label: "WAV audio", mime: "audio/wav" }, base);
-  if (form === "AVI") return Object.assign({ id: "avi", label: "AVI video", mime: "video/x-msvideo" }, base);
-  if (form === "WEBP") return Object.assign({ id: "webp", label: "WebP image", mime: "image/webp" }, base);
+  const base = { notes: "RIFF form: " + (form || "?"), signature: "52 49 46 46", offset: 0, confidence: "high" };
+  if (form === "WAVE") return { ...base, id: "wav", label: "WAV audio", mime: "audio/wav" };
+  if (form === "AVI") return { ...base, id: "avi", label: "AVI video", mime: "video/x-msvideo" };
+  if (form === "WEBP") return { ...base, id: "webp", label: "WebP image", mime: "image/webp" };
   return { id: "riff", label: "RIFF container (form '" + form + "')", mime: "application/octet-stream",
-    confidence: "low", evidence: "unknown RIFF form: " + form, signature: "52 49 46 46", offset: 0 };
+    confidence: "low", notes: "unknown RIFF form: " + form, signature: "52 49 46 46", offset: 0 };
 }
 
-// EBML: Matroska vs WebM by looking for the "webm" DocType nearby.
 function refineEbml(bytes) {
   const window = bytes.subarray(0, Math.min(bytes.length, 64));
-  const isWebm = containsAscii(window, "webm");
-  if (isWebm)
+  if (indexOfAscii(window, "webm") !== -1)
     return { id: "webm", label: "WebM video", mime: "video/webm", confidence: "high",
-      evidence: "EBML DocType 'webm'", signature: "1A 45 DF A3", offset: 0 };
+      notes: "EBML DocType 'webm'", signature: "1A 45 DF A3", offset: 0 };
   return { id: "mkv", label: "Matroska video", mime: "video/x-matroska", confidence: "high",
-    evidence: "EBML header (matroska)", signature: "1A 45 DF A3", offset: 0 };
+    notes: "EBML header (matroska)", signature: "1A 45 DF A3", offset: 0 };
 }
 
-// Windows PE: parse the COFF characteristics to split EXE vs DLL.
 function refinePe(bytes) {
   const base = { signature: "4D 5A", offset: 0 };
   const peOff = readUint32LE(bytes, 0x3c);
   if (peOff > 0 && peOff + 24 <= bytes.length && asciiAt(bytes, peOff, 4) === "PE\u0000\u0000") {
     const characteristics = readUint16LE(bytes, peOff + 22);
-    const isDll = (characteristics & 0x2000) !== 0; // IMAGE_FILE_DLL
+    const isDll = (characteristics & 0x2000) !== 0;
     if (isDll)
-      return Object.assign({ id: "dll", label: "Windows DLL (PE)", mime: "application/vnd.microsoft.portable-executable",
-        confidence: "high", evidence: "PE header, IMAGE_FILE_DLL set" }, base);
-    return Object.assign({ id: "exe", label: "Windows executable (PE)", mime: "application/vnd.microsoft.portable-executable",
-      confidence: "high", evidence: "PE header, IMAGE_FILE_DLL not set" }, base);
+      return { ...base, id: "dll", label: "Windows DLL (PE)", mime: "application/vnd.microsoft.portable-executable",
+        confidence: "high", notes: "PE header, IMAGE_FILE_DLL set" };
+    return { ...base, id: "exe", label: "Windows executable (PE)", mime: "application/vnd.microsoft.portable-executable",
+      confidence: "high", notes: "PE header, IMAGE_FILE_DLL not set" };
   }
-  // Could not reach/parse the PE header (e.g. beyond window): stay broad.
-  return Object.assign({ id: "pe", label: "DOS/Windows executable (MZ)", mime: "application/vnd.microsoft.portable-executable",
-    confidence: "medium", evidence: "MZ header; PE header not parsed" }, base);
+  return { ...base, id: "pe", label: "DOS/Windows executable (MZ)", mime: "application/vnd.microsoft.portable-executable",
+    confidence: "medium", notes: "MZ header; PE header not parsed" };
 }
 
-// CA FE BA BE is shared by Java class files and Mach-O universal binaries.
 function disambiguateCafebabe(bytes) {
   const base = { signature: "CA FE BA BE", offset: 0 };
-  const major = readUint16BE(bytes, 6); // Java class major version
-  const nfat = readUint32BE(bytes, 4);  // Mach-O fat arch count
+  const major = readUint16BE(bytes, 6);
+  const nfat = readUint32BE(bytes, 4);
   if (major >= 45 && major <= 100)
-    return Object.assign({ id: "javaclass", label: "Java class", mime: "application/java-vm",
-      confidence: "high", evidence: "class major version " + major }, base);
+    return { ...base, id: "javaclass", label: "Java class", mime: "application/java-vm",
+      confidence: "high", notes: "class major version " + major };
   if (nfat >= 1 && nfat <= 40)
-    return Object.assign({ id: "machofat", label: "Mach-O universal binary", mime: "application/x-mach-binary",
-      confidence: "medium", evidence: nfat + " architectures" }, base);
-  return Object.assign({ id: "javaclass", label: "Java class / Mach-O FAT (ambiguous)", mime: "application/octet-stream",
-    confidence: "low", evidence: "CAFEBABE magic could not be disambiguated" }, base);
+    return { ...base, id: "machofat", label: "Mach-O universal binary", mime: "application/x-mach-binary",
+      confidence: "medium", notes: nfat + " architectures" };
+  return { ...base, id: "javaclass", label: "Java class / Mach-O FAT (ambiguous)", mime: "application/octet-stream",
+    confidence: "low", notes: "CAFEBABE magic could not be disambiguated" };
 }
 
-/* =========================================================================
- * TEXT HEURISTICS
- * Only used when no binary signature matches. Text formats have no strong
- * magic bytes, so results are low-confidence and treated as broad.
- * ========================================================================= */
 function looksLikeText(bytes) {
   if (bytes.length === 0) return false;
   // Byte order marks are a strong "this is text" signal.
@@ -917,69 +816,57 @@ function analyzeText(bytes) {
   const text = decodeTextSample(bytes);
   const trimmed = text.replace(/^\uFEFF/, "").trimStart();
   const lower = trimmed.toLowerCase();
-  const common = { confidence: "low", signature: "(text heuristic)", offset: 0 };
+  const base = { confidence: "low", signature: "(text heuristic)", offset: 0 };
 
-  // SVG is XML with an <svg> root element.
   if (/<svg[\s>]/i.test(trimmed))
-    return Object.assign({ id: "svg", label: "SVG image (XML)", mime: "image/svg+xml", confidence: "medium",
-      evidence: "contains <svg> element" }, { signature: "(text heuristic)", offset: 0 });
+    return { ...base, id: "svg", label: "SVG image (XML)", mime: "image/svg+xml", confidence: "medium",
+      notes: "contains <svg> element" };
 
   if (lower.startsWith("<!doctype html") || lower.startsWith("<html") || /<html[\s>]/i.test(lower.slice(0, 200)))
-    return Object.assign({ id: "html", label: "HTML document", mime: "text/html", evidence: "HTML markup" }, common);
+    return { ...base, id: "html", label: "HTML document", mime: "text/html", notes: "HTML markup" };
 
   if (trimmed.startsWith("<?xml") || /^<[a-z!]/i.test(trimmed))
-    return Object.assign({ id: "xml", label: "XML document", mime: "application/xml", evidence: "XML markup" }, common);
+    return { ...base, id: "xml", label: "XML document", mime: "application/xml", notes: "XML markup" };
 
-  // JSON: starts with { or [ and parses (or at least looks structured).
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
     let ok = false;
     try { JSON.parse(text); ok = true; } catch (e) { ok = /["}\]]/.test(trimmed) && /[:,]/.test(trimmed); }
     if (ok)
-      return Object.assign({ id: "json", label: "JSON data", mime: "application/json",
-        evidence: "JSON structure", confidence: bytes.length <= 8192 ? "medium" : "low" }, { signature: "(text heuristic)", offset: 0 });
+      return { ...base, id: "json", label: "JSON data", mime: "application/json",
+        notes: "JSON structure", confidence: bytes.length <= 8192 ? "medium" : "low" };
   }
 
-  // CSV: several lines, each with a consistent number of commas/tabs.
   const lines = text.split(/\r?\n/).filter((l) => l.length > 0).slice(0, 10);
   if (lines.length >= 2) {
     const commaCounts = lines.map((l) => (l.match(/,/g) || []).length);
     if (commaCounts[0] >= 1 && commaCounts.every((c) => c === commaCounts[0]))
-      return Object.assign({ id: "csv", label: "CSV data", mime: "text/csv", evidence: "delimiter-consistent rows" }, common);
+      return { ...base, id: "csv", label: "CSV data", mime: "text/csv", notes: "delimiter-consistent rows" };
   }
 
-  // Markdown: common leading markers.
   if (/^#{1,6}\s/m.test(text) || /^\s*[-*]\s/m.test(text) || /```/.test(text) || /\[[^\]]+\]\([^)]+\)/.test(text))
-    return Object.assign({ id: "markdown", label: "Markdown document", mime: "text/markdown", evidence: "markdown markers" }, common);
+    return { ...base, id: "markdown", label: "Markdown document", mime: "text/markdown", notes: "markdown markers" };
 
-  // Otherwise: plain text.
-  return Object.assign({ id: "txt", label: "Plain text", mime: "text/plain", evidence: "printable text, no strong markers" }, common);
+  return { ...base, id: "txt", label: "Plain text", mime: "text/plain", notes: "printable text, no strong markers" };
 }
 
-/* =========================================================================
- * DETECTION ORCHESTRATOR
- * Reads bytes, runs the engine, applies refiners, falls back to text.
- * Returns a normalized detection object (never throws for empty/unknown).
- * ========================================================================= */
-async function detectType(file) {
+function detectType(file, header) {
   if (file.size === 0) {
     return { id: null, label: "Empty file", mime: null, confidence: "n/a",
       signature: "(none)", offset: null, notes: "The file contains zero bytes.",
-      evidence: "0 bytes", accepted: [], broad: false, empty: true };
+      accepted: [], broad: false, empty: true };
   }
 
-  const header = await readHeader(file);
   let detection = null;
+  const matches = matchSignatures(header);
 
-  const matches = matchSignatures(header, file);
   if (matches.length > 0) {
     const best = matches[0];
     detection = {
       id: best.id, label: best.label, mime: best.mime,
       confidence: best.confidence, signature: best.signature, offset: best.offset,
-      notes: best.notes, evidence: best.notes, fallbackExt: best.extensions
+      notes: best.notes
     };
 
-    // Apply container refiners based on the primary match.
     let refined = null;
     if (best.id === "zip") refined = refineZip(header);
     else if (best.id === "isobmff") refined = refineIsoBmff(header);
@@ -988,34 +875,24 @@ async function detectType(file) {
     else if (best.id === "pe") refined = refinePe(header);
     else if (best.id === "javaclass" || best.id === "machofat") refined = disambiguateCafebabe(header);
 
-    if (refined) {
-      detection = Object.assign({}, detection, refined);
-      if (refined.evidence) detection.notes = refined.evidence;
-    }
+    if (refined) detection = { ...detection, ...refined };
   } else {
-    // No binary signature: try text heuristics.
     const text = analyzeText(header);
-    if (text) {
-      detection = Object.assign({ notes: text.evidence }, text);
-    }
+    if (text) detection = text;
   }
 
   if (!detection) {
     return { id: null, label: "Unknown", mime: null, confidence: "none",
       signature: "(no match)", offset: null, notes: "No known signature or text heuristic matched.",
-      evidence: "no match", accepted: [], broad: false, unknown: true };
+      accepted: [], broad: false, unknown: true };
   }
 
-  detection.accepted = acceptedExtensions(detection.id, detection.fallbackExt);
+  detection.accepted = acceptedExtensions(detection.id);
   detection.broad = BROAD_IDS.has(detection.id);
   return detection;
 }
 
-/* =========================================================================
- * EXTENSION COMPARISON  ->  MATCH / MISMATCH / AMBIGUOUS / UNKNOWN
- * ========================================================================= */
 function evaluate(detection, actualExt) {
-  // No detection at all.
   if (detection.empty)
     return { status: "unknown", warning: "The file is empty (0 bytes); no type can be determined." };
   if (detection.unknown || !detection.id)
@@ -1025,8 +902,6 @@ function evaluate(detection, actualExt) {
   const cmp = compareExtension(detection.accepted, actualExt);
   const typeName = detection.label;
 
-  // An unrefined ZIP container is honestly ambiguous: even a ".zip" file may
-  // be an unrecognized ZIP-based format whose subtype we could not determine.
   if (detection.id === "zip")
     return { status: "ambiguous",
       warning: "This appears to be a ZIP container. A more specific subtype (Office, ODF, EPUB, JAR, APK...) could not be determined from the header." +
@@ -1035,20 +910,15 @@ function evaluate(detection, actualExt) {
   if (cmp === "match")
     return { status: "match", warning: "" };
 
-  // Broad/container types: report as ambiguous rather than a hard mismatch.
   if (detection.broad) {
     if (!actualExt)
       return { status: "ambiguous",
         warning: "Detected " + typeName + ", but the file has no extension. Subtype could not be confirmed." };
-    if (detection.id === "zip")
-      return { status: "ambiguous",
-        warning: "This appears to be a ZIP container. A more specific subtype could not be determined from the header." };
     return { status: "ambiguous",
       warning: "Detected " + typeName + " (a broad/container type). Extension \"." + actualExt +
         "\" may or may not be correct; subtype could not be confirmed." };
   }
 
-  // Strong detection but the extension disagrees: honest mismatch.
   if (!actualExt)
     return { status: "mismatch",
       warning: "This file has no extension but its bytes look like " + typeName + "." };
@@ -1056,18 +926,12 @@ function evaluate(detection, actualExt) {
     warning: "This file is named \"." + actualExt + "\" but its bytes look like " + typeName + "." };
 }
 
-/* =========================================================================
- * STATE + DOM REFERENCES
- * ========================================================================= */
-const reports = [];            // accumulated report objects (for JSON export)
+const reports = [];
 const el = (id) => document.getElementById(id);
 const resultsEl = el("results");
 const dropEl = el("drop");
 const inputEl = el("fileInput");
 
-/* =========================================================================
- * HEX PREVIEW  (offset | hex | ascii)  -- first N bytes only
- * ========================================================================= */
 function buildHexPreview(bytes) {
   const limit = Math.min(bytes.length, HEX_PREVIEW_BYTES);
   const rows = [];
@@ -1090,9 +954,6 @@ function buildHexPreview(bytes) {
   return rows.join("\n");
 }
 
-/* =========================================================================
- * RENDERING
- * ========================================================================= */
 function field(key, value, cls) {
   return '<div class="field"><span class="k">' + escapeHtml(key) + '</span>' +
     '<span class="v ' + (cls || "") + '">' + escapeHtml(value) + "</span></div>";
@@ -1137,7 +998,10 @@ function clearEmptyState() {
 
 function updateSummary() {
   const counts = { total: reports.length, match: 0, mismatch: 0, ambiguous: 0, unknown: 0 };
-  for (const r of reports) counts[r.status] = (counts[r.status] || 0) + 1;
+  for (const r of reports) {
+    const key = r.status === "error" ? "unknown" : r.status;
+    counts[key] = (counts[key] || 0) + 1;
+  }
   el("statTotal").textContent = counts.total;
   el("statMatch").textContent = counts.match;
   el("statMismatch").textContent = counts.mismatch;
@@ -1148,54 +1012,47 @@ function updateSummary() {
   el("clearBtn").disabled = !hasData;
 }
 
-/* =========================================================================
- * SCAN PIPELINE (per file)
- * ========================================================================= */
 async function scanFile(file) {
-  let detection, evaluation, hexBytes = null;
   try {
-    detection = await detectType(file);
-    hexBytes = await readSlice(file, 0, HEX_PREVIEW_BYTES);
+    const header = await readHeader(file);
+    const detection = detectType(file, header);
+    const hexBytes = header.subarray(0, Math.min(header.length, HEX_PREVIEW_BYTES));
+    const actualExt = getExtension(file.name);
+    const evaluation = evaluate(detection, actualExt);
+
+    const report = {
+      filename: file.name,
+      size: file.size,
+      extension: actualExt,
+      browserMime: file.type || "",
+      detectedType: detection.label,
+      detectedMime: detection.mime || null,
+      status: evaluation.status,
+      confidence: detection.confidence,
+      signature: detection.signature,
+      offset: detection.offset,
+      notes: detection.notes || "",
+      warning: evaluation.warning
+    };
+    if (file.size > BIG_FILE_BYTES) {
+      report.notes = (report.notes ? report.notes + " " : "") + "(Large file: only the header window was read.)";
+    }
+
+    reports.push(report);
+    resultsEl.prepend(renderCard(report, hexBytes));
+    updateSummary();
   } catch (err) {
-    // Unreadable file (permissions, disk error, etc.)
+    const msg = (err && err.message) ? err.message : String(err);
     const report = {
       filename: file.name, size: file.size, extension: getExtension(file.name),
       browserMime: file.type || "", detectedType: "Unreadable", detectedMime: null,
       status: "error", confidence: "n/a", signature: "(read error)", offset: null,
-      notes: (err && err.message) ? err.message : String(err), warning: "The file could not be read: " + ((err && err.message) || err)
+      notes: msg, warning: "The file could not be read: " + msg
     };
     reports.push(report);
-    const card = renderCard(report, null);
-    card.className = "card s-error";
-    resultsEl.prepend(card);
+    resultsEl.prepend(renderCard(report, null));
     updateSummary();
-    return;
   }
-
-  const actualExt = getExtension(file.name);
-  evaluation = evaluate(detection, actualExt);
-
-  const report = {
-    filename: file.name,
-    size: file.size,
-    extension: actualExt,
-    browserMime: file.type || "",
-    detectedType: detection.label,
-    detectedMime: detection.mime || null,
-    status: evaluation.status,
-    confidence: detection.confidence,
-    signature: detection.signature,
-    offset: detection.offset,
-    notes: detection.notes || detection.evidence || "",
-    warning: evaluation.warning
-  };
-  if (file.size > BIG_FILE_BYTES) {
-    report.notes = (report.notes ? report.notes + " " : "") + "(Large file: only header/footer windows were read.)";
-  }
-
-  reports.push(report);
-  resultsEl.prepend(renderCard(report, hexBytes));
-  updateSummary();
 }
 
 async function scanFiles(fileList) {
@@ -1208,21 +1065,11 @@ async function scanFiles(fileList) {
   }
 }
 
-/* =========================================================================
- * REPORT / CLIPBOARD
- * ========================================================================= */
 function buildReport() {
-  return reports.map((r) => ({
-    filename: r.filename,
-    size: r.size,
+  return reports.map(({ warning, ...r }) => ({
+    ...r,
     extension: r.extension || null,
     browserMime: r.browserMime || null,
-    detectedType: r.detectedType,
-    detectedMime: r.detectedMime,
-    status: r.status,
-    confidence: r.confidence,
-    signature: r.signature,
-    offset: r.offset,
     notes: r.notes || null
   }));
 }
@@ -1264,26 +1111,15 @@ function clearResults() {
   updateSummary();
 }
 
-/* =========================================================================
- * EVENT WIRING (drag/drop + picker + buttons)
- * ========================================================================= */
-function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
+function onDropEvent(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  if (e.type === "dragenter" || e.type === "dragover") dropEl.classList.add("drag");
+  if (e.type === "dragleave" || e.type === "drop") dropEl.classList.remove("drag");
+  if (e.type === "drop" && e.dataTransfer?.files?.length) scanFiles(e.dataTransfer.files);
+}
+["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => dropEl.addEventListener(evt, onDropEvent));
 
-["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => {
-  dropEl.addEventListener(evt, preventDefaults);
-});
-["dragenter", "dragover"].forEach((evt) => {
-  dropEl.addEventListener(evt, () => dropEl.classList.add("drag"));
-});
-["dragleave", "drop"].forEach((evt) => {
-  dropEl.addEventListener(evt, () => dropEl.classList.remove("drag"));
-});
-dropEl.addEventListener("drop", (e) => {
-  const dt = e.dataTransfer;
-  if (dt && dt.files && dt.files.length) scanFiles(dt.files);
-});
-
-// Click / keyboard activation of the drop zone opens the picker.
 const openPicker = () => inputEl.click();
 dropEl.addEventListener("click", openPicker);
 dropEl.addEventListener("keydown", (e) => {
@@ -1293,16 +1129,23 @@ el("pickBtn").addEventListener("click", openPicker);
 
 inputEl.addEventListener("change", (e) => {
   scanFiles(e.target.files);
-  e.target.value = ""; // allow re-selecting the same file
+  e.target.value = "";
 });
 
 el("copyBtn").addEventListener("click", copyReport);
 el("clearBtn").addEventListener("click", clearResults);
 
-// Prevent the browser from navigating away if a file is dropped outside the zone.
 ["dragover", "drop"].forEach((evt) => {
   window.addEventListener(evt, (e) => { e.preventDefault(); }, false);
 });
+
+(function selfCheck() {
+  const png = hexToBytes("89 50 4E 47 0D 0A 1A 0A");
+  console.assert(bytesMatchAt(png, png, 0), "bytesMatchAt");
+  console.assert(getExtension("photo.PNG") === "png", "getExtension");
+  console.assert(compareExtension(["png"], "png") === "match", "compareExtension");
+  console.assert(matchSignatures(png)[0]?.id === "png", "PNG signature");
+})();
 
 updateSummary();
 </script>
