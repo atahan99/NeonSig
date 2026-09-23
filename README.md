@@ -2,9 +2,9 @@
 
 **Magic-byte file signature scanner** — a cyberpunk-themed, fully client-side tool that identifies the *actual* type of a file by inspecting its raw bytes, then compares that against the file's extension to flag mismatches.
 
-Everything runs locally in your browser. **No server, no tracking, no CDN, no dependencies.** It's a single self-contained `index.html`.
+Everything runs locally in your browser. **No server, no CDN, no dependencies.** Page views are counted with Cloudflare Web Analytics. Files stay in the browser. It's a single self-contained `index.html`.
 
-**[Live demo →](https://atahan99.github.io/NeonSig/)**
+**[Live demo →](https://neonsig.cybrsmr.xyz)**
 
 <p align="center">
   <img src="screenshots/hero.png" alt="NeonSig home screen" width="800" />

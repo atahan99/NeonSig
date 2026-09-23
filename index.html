@@ -343,7 +343,7 @@
 
   <section class="panel about" id="about">
     <h3>&#9679; About</h3>
-    <p><strong>NeonSig</strong> inspects a file's raw bytes &mdash; its magic numbers and container structure &mdash; to determine the <em>actual</em> file type, then compares that against the claimed extension to surface mismatches. Everything runs locally in your browser: no server, no tracking, no CDN, no dependencies. It's a single self-contained <code>index.html</code>.</p>
+    <p><strong>NeonSig</strong> inspects a file's raw bytes &mdash; its magic numbers and container structure &mdash; to determine the <em>actual</em> file type, then compares that against the claimed extension to surface mismatches. Everything runs locally in your browser: no server, no CDN, no dependencies. Page views are counted with Cloudflare Web Analytics. Files are never uploaded. It's a single self-contained <code>index.html</code>.</p>
     <p class="about-meta">Open source &middot; MIT licensed &middot; 100% client-side</p>
     <div class="about-links">
       <a class="btn" href="https://github.com/atahan99/NeonSig" target="_blank" rel="noopener noreferrer" aria-label="View NeonSig on GitHub">
@@ -355,7 +355,7 @@
     </div>
   </section>
 
-  <footer>NeonSig &mdash; 100% client-side. No CDN, no tracking, no uploads. &middot; <a href="https://github.com/atahan99/NeonSig" target="_blank" rel="noopener noreferrer">github.com/atahan99/NeonSig</a></footer>
+  <footer>NeonSig &mdash; 100% client-side. No CDN, no uploads. &middot; <a href="https://github.com/atahan99/NeonSig" target="_blank" rel="noopener noreferrer">github.com/atahan99/NeonSig</a></footer>
 </div>
 
 <div class="toast" id="toast">Copied</div>
@@ -1149,5 +1149,8 @@ el("clearBtn").addEventListener("click", clearResults);
 
 updateSummary();
 </script>
+<!-- Cloudflare Web Analytics -->
+<script type="module" src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token": "25277610ffaf4480917526d560a513dc"}'></script>
+<!-- End Cloudflare Web Analytics -->
 </body>
 </html>
