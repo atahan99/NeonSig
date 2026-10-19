@@ -16,3 +16,6 @@ tmp/
 
 # Node (in case tooling is added later)
 node_modules/
+
+# Wrangler local state (contains the Cloudflare account id)
+.wrangler/

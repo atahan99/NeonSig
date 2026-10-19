@@ -1,113 +1,135 @@
 # NeonSig
 
-**Magic-byte file signature scanner** — a cyberpunk-themed, fully client-side tool that identifies the *actual* type of a file by inspecting its raw bytes, then compares that against the file's extension to flag mismatches.
+[![test](https://github.com/atahan99/NeonSig/actions/workflows/test.yml/badge.svg)](https://github.com/atahan99/NeonSig/actions/workflows/test.yml)
 
-Everything runs locally in your browser. **No server, no CDN, no dependencies.** Page views are counted with Cloudflare Web Analytics. Files stay in the browser. It's a single self-contained `index.html`.
+Find out what a file really is. NeonSig reads a file's first bytes in your browser, identifies the format from its magic number and container structure, and tells you when the extension is lying.
 
-**[Live demo →](https://neonsig.cybrsmr.xyz)**
+**[Try it → neonsig.cybrsmr.xyz](https://neonsig.cybrsmr.xyz)**
 
 <p align="center">
-  <img src="screenshots/hero.png" alt="NeonSig home screen" width="800" />
+  <img src="screenshots/mismatch.png" alt="NeonSig flagging a PDF that was renamed to .png" width="800" />
 </p>
 
-## Why
+## The problem
 
-A file's extension and the browser-reported MIME type are just *claims*. A `.png` can secretly be a PDF; a `.pdf` can be a Windows executable. NeonSig reads the leading bytes of a file (up to a 16 KB header window), matches them against known signatures and container structures, and tells you what the file **really** is — while being honest about uncertainty.
+Extensions and MIME types are labels anyone can change. Rename `invoice.exe` to `invoice.pdf` and most systems will believe you. Upload filters, mail gateways and file pickers that trust the label are easy to fool.
 
-## Features
+The bytes are harder to fake. A PDF starts with `%PDF-`, a PNG with `89 50 4E 47`, a Windows executable with `MZ` followed by a PE header. NeonSig checks those bytes and compares the answer with the name.
 
-- **Magic-byte detection** for 40+ formats: images, documents, archives, audio, video, executables, fonts, databases, and more.
-- **Container-aware refinement** — doesn't just say "ZIP":
-  - OOXML (`.docx` / `.xlsx` / `.pptx`) via internal part names
-  - ODF (`.odt` / `.ods` / `.odp`) and EPUB via the stored `mimetype`
+## What it does
+
+- **Identifies 40+ formats** across images, documents, archives, audio, video, executables, fonts and databases.
+- **Looks inside containers** instead of stopping at "it's a ZIP":
+  - DOCX / XLSX / PPTX from their internal part names
+  - ODT / ODS / ODP and EPUB from the stored `mimetype` entry
   - APK (`AndroidManifest.xml`) and JAR (`META-INF/MANIFEST.MF`)
-  - ISO-BMFF `ftyp` brands → MP4 / MOV / HEIC / AVIF / M4A
-  - RIFF form types → WAV / AVI / WebP
-  - EBML DocType → WebM vs MKV
-  - PE header parsing → Windows EXE vs DLL
-- **Honest verdicts:** `MATCH` / `MISMATCH` / `AMBIGUOUS` / `UNKNOWN`, with human-readable warnings.
-- **Drag-and-drop** plus a file-picker fallback, multi-file support.
-- **Hex preview** of the first 128 bytes with an ASCII column.
-- **Copy JSON report** and **clear results** with one click.
-- **Summary counters:** scanned / match / mismatch / ambiguous / unknown.
-- **Privacy-first:** files are never uploaded, executed, rendered, or embedded — only their bytes are inspected.
-- **Zero dependencies:** inline HTML, CSS, and JS. Works offline by opening the file directly.
+  - MP4 / MOV / HEIC / AVIF / M4A from ISO-BMFF `ftyp` brands
+  - WAV / AVI / WebP from the RIFF form type
+  - WebM vs MKV from the EBML DocType
+  - EXE vs DLL from the PE characteristics flag
+  - Java class vs Mach-O universal binary, which share the `CAFEBABE` magic
+- **Gives one of four verdicts**: `MATCH`, `MISMATCH`, `AMBIGUOUS` or `UNKNOWN`, plus a plain-English sentence explaining why.
+- **Shows its evidence**: the matched signature, offset, confidence, the browser-reported MIME type, and a hex dump of the first 128 bytes.
+- **Handles large files quickly** because it reads only the first 16 KB via `Blob.slice()`, never the whole file.
+- **Exports a JSON report** of every scanned file to the clipboard.
 
-## Screenshots
+## Privacy
 
-| Scan results | Extension mismatch |
+Your files never leave your machine. There is no upload endpoint; the page has no backend at all. NeonSig reads raw bytes and never executes, renders or embeds the file.
+
+The hosted version loads [Cloudflare Web Analytics](https://www.cloudflare.com/web-analytics/) to count page views and load times. NeonSig never sends it file names or contents. If you'd rather avoid it, run the local copy described below. It works fully offline.
+
+## Verdicts
+
+| Verdict | Meaning |
 | --- | --- |
-| ![Results](screenshots/results.png) | ![Mismatch](screenshots/mismatch.png) |
+| **MATCH** | The extension is a valid one for the detected format. |
+| **MISMATCH** | The bytes clearly identify a format, and the extension doesn't belong to it (e.g. a PDF named `.png`). |
+| **AMBIGUOUS** | The format is a broad container or a text type, and the specific subtype can't be confirmed from the header. |
+| **UNKNOWN** | No signature or text heuristic matched: unsupported, empty, encrypted or truncated. |
 
-## Usage
+## Run it locally
 
-### Option 1 — just open it
-
-Download or clone the repo and open `index.html` in any modern browser (Chrome, Edge, Firefox, Safari). No build step, no server.
+It's one HTML page plus `detect.js`, with no build step and no dependencies.
 
 ```bash
 git clone https://github.com/atahan99/NeonSig.git
 cd NeonSig
-open index.html        # macOS
-# or: xdg-open index.html   (Linux) / start index.html (Windows)
+open index.html
 ```
 
-### Option 2 — serve locally
-
-Some browsers restrict certain APIs on `file://`. Serving over HTTP avoids any such quirks:
+On Linux use `xdg-open index.html`; on Windows, `start index.html`. To serve it over HTTP instead, for example to get the async Clipboard API:
 
 ```bash
 python3 -m http.server 8000
-# then visit http://localhost:8000
 ```
 
-Drag files onto the drop zone (or click **Select files**). Each file is analyzed and rendered as a result card. Use **Copy report** to grab a JSON summary.
+Then visit `http://localhost:8000`.
 
 ## How it works
 
 ```mermaid
-flowchart TD
-    input["Drop zone / file picker"] --> read["Read header (16KB window)"]
-    read --> engine["Signature matching engine"]
-    engine --> refine["Container refiners: ZIP / ISO-BMFF / RIFF / EBML / PE"]
-    refine --> text["Text heuristics (if no binary match)"]
-    text --> cmp["Compare detected type vs extension"]
-    cmp --> render["Result card + hex preview + summary"]
+flowchart LR
+    A[File] --> B[Read first 16 KB]
+    B --> C{Magic-byte match?}
+    C -- yes --> D[Container refiners<br/>ZIP · ISO-BMFF · RIFF · EBML · PE · CAFEBABE]
+    C -- no --> E[Text heuristics<br/>SVG · HTML · XML · JSON · CSV · Markdown]
+    D --> F[Compare with extension]
+    E --> F
+    F --> G[Verdict + evidence]
 ```
 
-1. Only a bounded header window is read via `Blob.slice().arrayBuffer()`, so huge files are handled without loading them fully.
-2. A local signature registry matches magic numbers at defined offsets (with optional bitmasks for variable fields).
-3. Container refiners inspect internal structure to narrow broad matches to specific subtypes.
-4. When nothing binary matches, conservative text heuristics classify text formats (SVG, HTML, XML, JSON, CSV, Markdown, plain text) at low confidence.
-5. The detected type is compared to the extension to produce a status and a plain-English warning.
+1. **Signature registry.** Each format is one entry: hex patterns, an offset, accepted extensions, and a confidence level. Matches are ranked by confidence, then by pattern length, so the most specific signature wins.
+2. **Refiners.** Broad containers get a second pass. The ZIP refiner, for example, walks local file headers inside the 16 KB window and reads entry names. Finding `word/document.xml` turns "ZIP archive" into "Word document".
+3. **Text fallback.** If no binary signature matches and the bytes look like text (no NUL bytes, few control characters), lightweight heuristics classify common text formats at low confidence.
+4. **Verdict.** The detected type's accepted extensions are compared with the real one. Broad and low-confidence detections become `AMBIGUOUS` rather than a false `MISMATCH`.
 
-## The verdicts
+All rendered values pass through HTML escaping, so a hostile file name can't inject markup. The site is served with a Content-Security-Policy that allows scripts only from its own origin and Cloudflare's analytics beacon, plus `X-Frame-Options: DENY`, `nosniff` and a locked-down Permissions-Policy (see [`_headers`](_headers)).
 
-| Status | Meaning |
+## Supported formats
+
+| Category | Formats |
 | --- | --- |
-| **MATCH** | The extension is one of the expected extensions for the detected type. |
-| **MISMATCH** | The detected type is strong and the extension does not fit (e.g. a PDF named `.png`). |
-| **AMBIGUOUS** | The type is a broad/container format whose specific subtype could not be confirmed. |
-| **UNKNOWN** | No reliable signature or heuristic matched (unsupported, empty, encrypted, or truncated). |
+| Images | PNG, JPEG, GIF, WebP, BMP, TIFF, ICO, CUR, SVG, AVIF, HEIC/HEIF |
+| Documents | PDF, RTF, legacy Office (OLE/CFB), DOCX, XLSX, PPTX, ODT, ODS, ODP, EPUB |
+| Archives | ZIP, JAR, APK, RAR 4/5, 7z, GZIP, BZIP2, XZ, TAR |
+| Audio | MP3 (ID3 and frame sync), WAV, FLAC, OGG, MIDI, M4A/AAC |
+| Video | MP4, MOV, 3GP, AVI, MKV, WebM, MPEG |
+| Executables | Windows PE (EXE/DLL), ELF, Mach-O, Java class, WebAssembly |
+| Fonts | WOFF, WOFF2, TTF, OTF |
+| Text | JSON, XML, HTML, CSV, Markdown, plain text |
+| Other | SQLite |
 
 ## Limitations
 
-Magic-number detection is useful but **not a full malware scan**. A file can be polyglot, malformed, encrypted, truncated, or intentionally crafted to evade simple checks. The browser-reported MIME type and the extension are treated as claims, never as proof. Unknown and ambiguous results are valid outcomes and are shown honestly rather than guessed.
+This is a file-type identifier, not a malware scanner.
 
-## Supported formats (selection)
+- Only the first 16 KB are read. Polyglots that hide a second format later in the file, such as a ZIP appended to a JPEG, will be reported as the first format.
+- Short magic numbers (`BM`, `MZ`, `ID3`, `BZh`) are ignored when the header reads as text, so a note that starts with "BMW" stays a text file. The trade-off: a binary file that happens to look like text in its first 4 KB won't match those signatures.
+- Text formats have no magic bytes, so their detection is heuristic and always reported at low or medium confidence.
+- Encrypted, truncated or deliberately malformed files may come back `UNKNOWN`. That is the honest answer.
 
-- **Images:** PNG, JPEG, GIF, WebP, BMP, TIFF, ICO/CUR, SVG, AVIF, HEIC/HEIF
-- **Documents:** PDF, RTF, legacy MS Office (OLE/CFB), DOCX/XLSX/PPTX, ODT/ODS/ODP, EPUB
-- **Archives:** ZIP, JAR, APK, RAR (v4/v5), 7z, GZIP, BZIP2, XZ, TAR
-- **Audio:** MP3 (ID3 + frame sync), WAV, FLAC, OGG, MIDI, M4A/AAC
-- **Video:** MP4/MOV/3GP, AVI, MKV/WebM, MPEG
-- **Executables:** Windows PE (EXE/DLL), ELF, Mach-O, Java class, WebAssembly
-- **Fonts:** WOFF, WOFF2, TTF, OTF
-- **Other:** SQLite database
+## Tests
 
-## Contributing
+The detection engine lives in [`detect.js`](detect.js), separate from the UI, so it runs under Node too. The suite in [`test/`](test/detect.test.js) builds a small byte fixture for each format and asserts the detected type and verdict. It also includes regression cases for past false positives. It needs Node 20 or newer and nothing else:
 
-Issues and pull requests are welcome. Adding a format is usually just a new entry in the signature registry inside `index.html`.
+```bash
+node --test
+```
+
+CI runs the same command on every push and pull request.
+
+## Adding a format
+
+Add an entry to the `SIGNATURES` array in `detect.js`:
+
+```js
+{ id: "png", label: "PNG image", mime: "image/png", extensions: ["png"],
+  patterns: ["89 50 4E 47 0D 0A 1A 0A"], offset: 0, confidence: "high",
+  notes: "PNG 8-byte signature." },
+```
+
+If the format lives inside a container, extend the matching refiner (`refineZip`, `refineIsoBmff`, `refineRiff`, …) instead. Add a fixture to `test/detect.test.js` either way. Issues and pull requests are welcome.
 
 ## License
 
