@@ -37,7 +37,7 @@ The bytes are harder to fake. A PDF starts with `%PDF-`, a PNG with `89 50 4E 47
 
 Your files never leave your machine. There is no upload endpoint; the page has no backend at all. NeonSig reads raw bytes and never executes, renders or embeds the file.
 
-The hosted version loads [Cloudflare Web Analytics](https://www.cloudflare.com/web-analytics/) to count page views and load times. NeonSig never sends it file names or contents. If you'd rather avoid it, run the local copy described below. It works fully offline.
+That isn't only a promise. The page loads no analytics and no third-party code, and its Content-Security-Policy sets `connect-src 'none'`, so the browser itself refuses any network request the page might try. Open DevTools → Network while scanning and you'll see nothing go out.
 
 ## Verdicts
 
@@ -50,7 +50,7 @@ The hosted version loads [Cloudflare Web Analytics](https://www.cloudflare.com/w
 
 ## Run it locally
 
-It's one HTML page plus `detect.js`, with no build step and no dependencies.
+It's a static page (`index.html`, `app.css`, `app.js` and `detect.js`) with no build step and no dependencies.
 
 ```bash
 git clone https://github.com/atahan99/NeonSig.git
@@ -84,7 +84,11 @@ flowchart LR
 3. **Text fallback.** If no binary signature matches and the bytes look like text (no NUL bytes, few control characters), lightweight heuristics classify common text formats at low confidence.
 4. **Verdict.** The detected type's accepted extensions are compared with the real one. Broad and low-confidence detections become `AMBIGUOUS` rather than a false `MISMATCH`.
 
-All rendered values pass through HTML escaping, so a hostile file name can't inject markup. The site is served with a Content-Security-Policy that allows scripts only from its own origin and Cloudflare's analytics beacon, plus `X-Frame-Options: DENY`, `nosniff` and a locked-down Permissions-Policy (see [`_headers`](_headers)).
+All rendered values pass through HTML escaping, so a hostile file name can't inject markup. On top of that, the site's security headers (see [`_headers`](_headers)) set:
+
+- **A strict CSP with no inline code**: `default-src 'none'`, with scripts, styles and images allowed only from the site itself, and no network connections at all.
+- **Trusted Types** (`require-trusted-types-for 'script'`): the browser rejects any HTML string written to the DOM unless it goes through the app's single `neonsig` policy, and the only caller of that policy escapes its input.
+- Cross-origin isolation of the window and its resources (`COOP` / `CORP: same-origin`), `frame-ancestors 'none'`, `nosniff`, `no-referrer`, and a Permissions-Policy that turns off camera, microphone, location and similar APIs.
 
 ## Supported formats
 
