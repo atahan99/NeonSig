@@ -65,7 +65,7 @@ function renderCard(report, hexBytes) {
   card.className = "card s-" + report.status;
 
   const badge = '<span class="badge ' + report.status + '">' + report.status.toUpperCase() + "</span>";
-  const head = '<div class="card-head"><span class="fname">' + escapeHtml(report.filename) + "</span>" + badge + "</div>";
+  const head = '<div class="card-head"><span class="fname">' + escapeHtml(revealName(report.filename)) + "</span>" + badge + "</div>";
 
   const warn = report.warning
     ? '<div class="warn ' + (report.status === "ambiguous" ? "ambiguous" : "") + '">' + escapeHtml(report.warning) + "</div>"
@@ -118,7 +118,7 @@ async function scanFile(file) {
     const detection = detectType(file, header);
     const hexBytes = header.subarray(0, Math.min(header.length, HEX_PREVIEW_BYTES));
     const actualExt = getExtension(file.name);
-    const evaluation = evaluate(detection, actualExt);
+    const evaluation = evaluate(detection, file.name);
 
     const report = {
       filename: file.name,
