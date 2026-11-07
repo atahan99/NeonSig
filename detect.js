@@ -49,13 +49,39 @@ function getExtension(filename) {
   const name = String(filename || "");
   const dot = name.lastIndexOf(".");
   if (dot <= 0 || dot === name.length - 1) return "";
-  return name.slice(dot + 1).trim().replace(/^\./, "").toLowerCase();
+  const ext = name.slice(dot + 1).trim().replace(/^\./, "").toLowerCase();
+  // "perl5.34" or "app.v2.1" end in a version number, not a type claim.
+  return /^\d+$/.test(ext) ? "" : ext;
 }
 
-function compareExtension(detectedExtensions, actualExt) {
-  if (!detectedExtensions || detectedExtensions.length === 0) return "unknown";
-  if (!actualExt) return "mismatch";
-  return detectedExtensions.includes(actualExt) ? "match" : "mismatch";
+// Unicode bidi controls. U+202E (right-to-left override) makes "invoice\u202Efdp.exe" display as "invoiceexe.pdf".
+const BIDI_CONTROLS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
+
+// Show hidden bidi controls as visible "[U+202E]" markers so the real name can be read.
+function revealName(filename) {
+  return String(filename || "").replace(BIDI_CONTROLS, (c) =>
+    "[U+" + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0") + "]");
+}
+
+// Extensions people open without a second thought, used as the decoy in "report.pdf.exe".
+const DECOY_EXTENSIONS = new Set("pdf doc docx xls xlsx ppt pptx txt rtf csv jpg jpeg png gif bmp mp3 mp4 mov avi zip".split(" "));
+// Extensions Windows or a shell will run when the file is opened.
+const RISKY_EXTENSIONS = new Set("exe scr com pif bat cmd msi dll cpl ps1 vbs vbe js jse wsf wsh hta lnk jar sh app".split(" "));
+
+// Returns a warning when the file name itself is built to deceive, or "".
+function nameTrick(filename, detection) {
+  const name = String(filename || "");
+  const ext = getExtension(name);
+  const hidden = name.match(BIDI_CONTROLS);
+  if (hidden)
+    return "The file name contains hidden bidirectional control characters (" + revealName(hidden.join("")) +
+      "), which make it display with a fake extension. Its real extension is \"." + ext + "\".";
+  const parts = name.split(".");
+  const decoy = parts.length >= 3 ? parts[parts.length - 2].trim().toLowerCase() : "";
+  if (DECOY_EXTENSIONS.has(decoy) && (RISKY_EXTENSIONS.has(ext) || EXEC_IDS.has(detection.id)))
+    return "Double extension: the name ends in \"." + decoy + "." + ext + "\", so it reads as a ." + decoy +
+      " file, but it is opened as \"." + ext + "\".";
+  return "";
 }
 // Signature registry: { id, label, mime, extensions, patterns, offset, confidence, notes }
 const SIGNATURES = [
@@ -90,7 +116,7 @@ const SIGNATURES = [
     patterns: ["7B 5C 72 74 66"], offset: 0, confidence: "high",
     notes: "'{\\rtf' header." },
   { id: "ole", label: "Legacy MS Office (OLE/CFB)", mime: "application/x-ole-storage",
-    extensions: ["doc", "xls", "ppt", "msg", "msi"],
+    extensions: ["doc", "dot", "xls", "xlt", "ppt", "pot", "msg", "msi", "pub", "vsd", "mpp"],
     patterns: ["D0 CF 11 E0 A1 B1 1A E1"], offset: 0, confidence: "medium",
     notes: "Compound File Binary; DOC/XLS/PPT and others share this container." },
 
@@ -203,10 +229,34 @@ for (const sig of SIGNATURES) {
 }
 const SIG_BY_ID = Object.fromEntries(SIGNATURES.map((s) => [s.id, s]));
 
-const BROAD_IDS = new Set([
-  "zip", "riff", "isobmff", "ebml", "ole", "pe", "machofat", "ttf",
-  "txt", "csv", "json", "xml", "html", "markdown", "mp3frame", "ogg", "mpeg"
-]);
+const BROAD_IDS = new Set(["zip", "riff", "isobmff", "ebml", "ole", "pe", "machofat", "ttf", "mp3frame", "ogg", "mpeg"]);
+
+// Short or shared magic numbers: never strong enough to call an extension a lie.
+const WEAK_IDS = new Set(["ttf", "mp3frame", "mpeg"]);
+
+const EXEC_IDS = new Set(["exe", "dll", "sys", "pe", "elf", "macho", "machofat", "script"]);
+
+// Text detections are one family: any text extension is an honest name for any of them.
+const TEXT_IDS = new Set(["txt", "csv", "json", "xml", "html", "markdown", "script"]);
+const TEXT_EXTENSIONS = new Set((
+  "txt text log csv tsv json jsonl ndjson xml xsd xsl html htm xhtml md markdown rst adoc tex " +
+  "js mjs cjs ts tsx jsx css scss sass less vue svelte astro py pyi rb go rs java kt kts scala " +
+  "swift c h cc cpp cxx hpp cs fs php pl pm lua r sql sh bash zsh fish ps1 psm1 bat cmd " +
+  "yaml yml toml ini cfg conf env properties lock gradle tf hcl dockerfile makefile mk " +
+  "plist srt vtt ics vcf diff patch"
+).split(" "));
+
+// Extensions a ZIP can carry beyond the subtypes the header window can confirm.
+const ZIP_FAMILY = new Set((
+  "docx docm dotx xlsx xlsm xltx pptx pptm potx odt ods odp epub jar war ear aar apk ipa xpi " +
+  "whl nupkg vsix kmz cbz xps 3mf"
+).split(" "));
+
+// Every extension that names a binary format. Text content under one of these is a lie.
+const BINARY_EXTENSIONS = new Set(
+  [...SIGNATURES.flatMap((s) => s.extensions), ...Object.values(REFINED_EXTENSIONS).flat()]
+    .filter((e) => !TEXT_EXTENSIONS.has(e) && e !== "svg")
+);
 
 async function readSlice(file, start, end) {
   const clampedStart = Math.max(0, Math.min(start, file.size));
@@ -233,9 +283,9 @@ function acceptedExtensions(id) {
   return sig ? sig.extensions : [];
 }
 
-// Magic numbers shorter than this ("BM", "MZ", "ID3", "BZh") are ordinary letters too,
+// Magic numbers shorter than this ("BM", "MZ", "ID3", "OTTO", "RIFF") are ordinary words too,
 // so they only count when the header is not plausibly text.
-const MIN_MAGIC_FOR_TEXT = 4;
+const MIN_MAGIC_FOR_TEXT = 5;
 
 function matchSignatures(bytes) {
   const matches = [];
@@ -443,6 +493,13 @@ function analyzeText(bytes) {
   const lower = trimmed.toLowerCase();
   const base = { confidence: "low", signature: "(text heuristic)", offset: 0 };
 
+  if (trimmed.startsWith("#!")) {
+    const words = trimmed.slice(2).split("\n")[0].trim().split(/\s+/);
+    const interp = (words[0].endsWith("/env") ? words[1] : words[0]).split("/").pop() || "unknown";
+    return { ...base, id: "script", label: "Script (" + interp + ")", mime: "text/plain",
+      confidence: "medium", notes: "shebang line: " + trimmed.split("\n")[0].trim() };
+  }
+
   // SVG only when <svg> is the root element, not when HTML/Markdown merely contains one.
   const root = trimmed.replace(/^(?:<\?xml[\s\S]*?\?>|<!--[\s\S]*?-->|<!doctype svg[^>]*>|\s+)*/i, "");
   if (/^<svg[\s>]/i.test(root))
@@ -519,43 +576,50 @@ function detectType(file, header) {
   return detection;
 }
 
-function evaluate(detection, actualExt) {
+function evaluate(detection, filename) {
+  const trick = nameTrick(filename, detection);
+  const verdict = extensionVerdict(detection, getExtension(filename));
+  if (trick) return { status: "mismatch", warning: trick + (verdict.warning ? " " + verdict.warning : "") };
+  return verdict;
+}
+
+function extensionVerdict(detection, ext) {
   if (detection.empty)
     return { status: "unknown", warning: "The file is empty (0 bytes); no type can be determined." };
   if (detection.unknown || !detection.id)
     return { status: "unknown",
       warning: "No reliable signature was found. The file may be an unsupported format, encrypted, corrupted, or truncated." };
 
-  const cmp = compareExtension(detection.accepted, actualExt);
-  const typeName = detection.label;
+  const type = detection.label;
+  // A missing extension is common (Unix binaries, scripts, Dockerfile) and claims nothing, so it can't lie.
+  if (!ext)
+    return { status: "ambiguous", warning: "The file has no extension. Its bytes look like " + type + "." };
 
-  if (detection.id === "zip")
-    return { status: "ambiguous",
-      warning: "This appears to be a ZIP container. A more specific subtype (Office, ODF, EPUB, JAR, APK...) could not be determined from the header." +
-        (actualExt && actualExt !== "zip" ? " Extension is \"." + actualExt + "\"." : "") };
-
-  if (cmp === "match")
-    return { status: "match", warning: "" };
-
-  if (detection.broad) {
-    if (!actualExt)
-      return { status: "ambiguous",
-        warning: "Detected " + typeName + ", but the file has no extension. Subtype could not be confirmed." };
-    return { status: "ambiguous",
-      warning: "Detected " + typeName + " (a broad/container type). Extension \"." + actualExt +
-        "\" may or may not be correct; subtype could not be confirmed." };
+  if (TEXT_IDS.has(detection.id)) {
+    if (TEXT_EXTENSIONS.has(ext)) return { status: "match", warning: "" };
+    if (BINARY_EXTENSIONS.has(ext))
+      return { status: "mismatch", warning: "This file is named \"." + ext + "\" but it contains text (" + type + "), not a binary ." + ext + " file." };
+    return { status: "ambiguous", warning: "The content is text (" + type + "). \"." + ext + "\" isn't an extension NeonSig knows, so it can't confirm the name." };
   }
 
-  if (!actualExt)
-    return { status: "mismatch",
-      warning: "This file has no extension but its bytes look like " + typeName + "." };
-  return { status: "mismatch",
-    warning: "This file is named \"." + actualExt + "\" but its bytes look like " + typeName + "." };
+  if (detection.accepted.includes(ext)) return { status: "match", warning: "" };
+
+  if (detection.id === "zip" && ZIP_FAMILY.has(ext))
+    return { status: "ambiguous",
+      warning: "This is a ZIP container, and \"." + ext + "\" is a ZIP-based format, but the parts that would confirm it aren't in the first 16 KB." };
+
+  if (detection.broad && (WEAK_IDS.has(detection.id) || detection.confidence === "low" || detection.accepted.length === 0))
+    return { status: "ambiguous",
+      warning: "Detected " + type + " from a short or shared signature, so \"." + ext + "\" can't be confirmed or ruled out." };
+
+  if (EXEC_IDS.has(detection.id))
+    return { status: "mismatch", warning: "Executable in disguise: this file is named \"." + ext + "\" but its bytes are a " + type + "." };
+  return { status: "mismatch", warning: "This file is named \"." + ext + "\" but its bytes look like " + type + "." };
 }
 
 if (typeof module === "object" && module.exports) {
   module.exports = {
-    hexToBytes, bytesMatchAt, getExtension, compareExtension, matchSignatures,
+    hexToBytes, bytesMatchAt, getExtension, revealName, matchSignatures,
     looksLikeText, analyzeText, readHeader, detectType, evaluate, SIGNATURES
   };
 }

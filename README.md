@@ -28,6 +28,8 @@ The bytes are harder to fake. A PDF starts with `%PDF-`, a PNG with `89 50 4E 47
   - WebM vs MKV from the EBML DocType
   - EXE vs DLL from the PE characteristics flag
   - Java class vs Mach-O universal binary, which share the `CAFEBABE` magic
+- **Catches deceptive file names**: hidden right-to-left override characters (`invoice[U+202E]fdp.exe`, which displays as `invoiceexe.pdf`) and double extensions (`invoice.pdf.exe`). Hidden characters are shown as `[U+202E]` markers.
+- **Calls out executables in disguise**: a PE, ELF, Mach-O or script named like a document gets a stronger warning than an ordinary mismatch.
 - **Gives one of four verdicts**: `MATCH`, `MISMATCH`, `AMBIGUOUS` or `UNKNOWN`, plus a plain-English sentence explaining why.
 - **Shows its evidence**: the matched signature, offset, confidence, the browser-reported MIME type, and a hex dump of the first 128 bytes.
 - **Handles large files quickly** because it reads only the first 16 KB via `Blob.slice()`, never the whole file.
@@ -43,9 +45,9 @@ That isn't only a promise. The page loads no analytics and no third-party code, 
 
 | Verdict | Meaning |
 | --- | --- |
-| **MATCH** | The extension is a valid one for the detected format. |
-| **MISMATCH** | The bytes clearly identify a format, and the extension doesn't belong to it (e.g. a PDF named `.png`). |
-| **AMBIGUOUS** | The format is a broad container or a text type, and the specific subtype can't be confirmed from the header. |
+| **MATCH** | The extension is a valid one for the detected format. Any text extension (`.txt`, `.py`, `.yaml`, …) matches any text content. |
+| **MISMATCH** | The bytes clearly identify a format and the extension doesn't belong to it (a PDF named `.png`, a ZIP named `.jpg`, text named `.png`), or the name itself is built to deceive. |
+| **AMBIGUOUS** | The name can't be confirmed or ruled out: no extension, a version number like `perl5.34`, a ZIP named `.docx` whose parts lie beyond the first 16 KB, or a short, shared signature. |
 | **UNKNOWN** | No signature or text heuristic matched: unsupported, empty, encrypted or truncated. |
 
 ## Run it locally
@@ -82,7 +84,7 @@ flowchart LR
 1. **Signature registry.** Each format is one entry: hex patterns, an offset, accepted extensions, and a confidence level. Matches are ranked by confidence, then by pattern length, so the most specific signature wins.
 2. **Refiners.** Broad containers get a second pass. The ZIP refiner, for example, walks local file headers inside the 16 KB window and reads entry names. Finding `word/document.xml` turns "ZIP archive" into "Word document".
 3. **Text fallback.** If no binary signature matches and the bytes look like text (no NUL bytes, few control characters), lightweight heuristics classify common text formats at low confidence.
-4. **Verdict.** The detected type's accepted extensions are compared with the real one. Broad and low-confidence detections become `AMBIGUOUS` rather than a false `MISMATCH`.
+4. **Verdict.** The file name is checked for hidden bidi characters and double extensions first. Then the detected type's accepted extensions are compared with the real one. Text content matches any text extension, ZIP content stays open for ZIP-based names, and short or shared signatures become `AMBIGUOUS` rather than a false `MISMATCH`.
 
 All rendered values pass through HTML escaping, so a hostile file name can't inject markup. On top of that, the site's security headers (see [`_headers`](_headers)) set:
 
@@ -109,7 +111,7 @@ All rendered values pass through HTML escaping, so a hostile file name can't inj
 This is a file-type identifier, not a malware scanner.
 
 - Only the first 16 KB are read. Polyglots that hide a second format later in the file, such as a ZIP appended to a JPEG, will be reported as the first format.
-- Short magic numbers (`BM`, `MZ`, `ID3`, `BZh`) are ignored when the header reads as text, so a note that starts with "BMW" stays a text file. The trade-off: a binary file that happens to look like text in its first 4 KB won't match those signatures.
+- Magic numbers shorter than 5 bytes (`BM`, `MZ`, `ID3`, `BZh`, `OTTO`, `RIFF`) are ignored when the header reads as text, so a note that starts with "BMW" stays a text file. The trade-off: a binary file that happens to look like text in its first 4 KB won't match those signatures.
 - Text formats have no magic bytes, so their detection is heuristic and always reported at low or medium confidence.
 - Encrypted, truncated or deliberately malformed files may come back `UNKNOWN`. That is the honest answer.
 

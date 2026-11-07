@@ -1,7 +1,7 @@
 "use strict";
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { hexToBytes, getExtension, readHeader, detectType, evaluate } = require("../detect.js");
+const { hexToBytes, getExtension, revealName, readHeader, detectType, evaluate } = require("../detect.js");
 
 const ascii = (s) => Array.from(s, (c) => c.charCodeAt(0));
 // Pad a header with zeros so offset-based checks (TAR at 257, PE at 0x3C) have room.
@@ -10,7 +10,7 @@ const pad = (bytes, n = 512) => { const a = new Uint8Array(Math.max(n, bytes.len
 async function scan(content, name) {
   const file = new File([content], name);
   const d = detectType(file, await readHeader(file));
-  return { id: d.id, status: evaluate(d, getExtension(name)).status };
+  return { id: d.id, status: evaluate(d, name).status };
 }
 
 function zipWith(...names) {
@@ -48,12 +48,12 @@ const cases = [
   ["real BMP", pad([...ascii("BM"), 0x46, 0, 0, 0, 0, 0, 0, 0, 0x36, 0, 0, 0, 0x28, 0, 0, 0]), "a.bmp", "bmp", "match"],
   ["PDF", "%PDF-1.7\n%\xe2\xe3\n", "a.pdf", "pdf", "match"],
   ["PDF renamed to .png", "%PDF-1.7\n", "invoice.png", "pdf", "mismatch"],
-  ["PDF with no extension", "%PDF-1.4\n", "invoice", "pdf", "mismatch"],
+  ["PDF with no extension", "%PDF-1.4\n", "invoice", "pdf", "ambiguous"],
   ["DOCX", zipWith("[Content_Types].xml", "word/document.xml"), "a.docx", "docx", "match"],
   ["XLSX", zipWith("xl/workbook.xml"), "a.xlsx", "xlsx", "match"],
   ["APK beats JAR", zipWith("META-INF/MANIFEST.MF", "AndroidManifest.xml"), "app.apk", "apk", "match"],
   ["JAR", zipWith("META-INF/MANIFEST.MF"), "lib.jar", "jar", "match"],
-  ["plain ZIP", zipWith("photo.jpg"), "a.zip", "zip", "ambiguous"],
+  ["plain ZIP", zipWith("photo.jpg"), "a.zip", "zip", "match"],
   ["GZIP", pad([0x1f, 0x8b, 0x08, 0x00]), "a.tar.gz", "gzip", "match"],
   ["real BZIP2", pad([...ascii("BZh9"), 0x31, 0x41, 0x59, 0x26, 0x53, 0x59]), "a.bz2", "bzip2", "match"],
   ["TAR (ustar at 257)", tar, "a.tar", "tar", "match"],
@@ -86,6 +86,36 @@ const cases = [
   ["HTML with inline SVG", '<!doctype html><html><body><svg viewBox="0 0 1 1"></svg></body></html>', "index.html", "html", "match"],
   ["XML mentioning <svg>", '<?xml version="1.0"?><doc><note>use <svg> tags</note></doc>', "a.xml", "xml", "match"],
   ["Markdown mentioning <svg>", "# Icons\nUse <svg> inline\n", "a.md", "markdown", "match"],
+  // Regressions: 4-byte ASCII magics in ordinary text.
+  ["text starting with OTTO", "OTTO meeting notes\nagenda\n", "otto.txt", "txt", "match"],
+  ["text starting with RIFF", "RIFF raff\nhello\n", "riff.txt", "txt", "match"],
+
+  // Containers: other ZIP-based names stay open, unrelated names are lies.
+  ["ZIP named .jpg", zipWith("photo.jpg"), "cat.jpg", "zip", "mismatch"],
+  ["ZIP named .docx, parts not in window", zipWith("[Content_Types].xml"), "a.docx", "zip", "ambiguous"],
+  ["legacy Office named .pdf", pad(hexToBytes("D0 CF 11 E0 A1 B1 1A E1")), "invoice.pdf", "ole", "mismatch"],
+  ["MZ without PE header named .pdf", pad([0x4d, 0x5a, 0x90, 0, 3]), "invoice.pdf", "pe", "mismatch"],
+
+  // No extension claims nothing, so it is never a mismatch.
+  ["ELF with no extension", pad([0x7f, ...ascii("ELF"), 2, 1, 1]), "ls", "elf", "ambiguous"],
+
+  // Text family: any text extension fits any text content.
+  ["text list in .txt", "Groceries\n- milk\n- eggs\n", "todo.txt", "markdown", "match"],
+  ["JavaScript", "const a = 1;\nconsole.log(a);\n", "app.js", "txt", "match"],
+  ["Python with # comments", "import os\n# list files\nprint(os.name)\n", "main.py", "markdown", "match"],
+  ["YAML", "name: x\nversion: 1\n", "config.yaml", "txt", "match"],
+  ["shebang script", "#!/usr/bin/env python3\nprint(1)\n", "deploy.py", "script", "match"],
+  ["shebang script, no extension", "#!/bin/sh\necho hi\n", "run", "script", "ambiguous"],
+  ["text renamed to .png", "<?php system($_GET['c']); ?>\n", "avatar.png", "txt", "mismatch"],
+  ["text with an unfamiliar extension", "hello\n", "notes.zzz", "txt", "ambiguous"],
+
+  // Deceptive file names.
+  ["right-to-left override name", peFile(0x0102), "invoice\u202Efdp.exe", "exe", "mismatch"],
+  ["double extension, real EXE", peFile(0x0102), "invoice.pdf.exe", "exe", "mismatch"],
+  ["double extension, padded with spaces", peFile(0x0102), "invoice.pdf      .exe", "exe", "mismatch"],
+  ["double extension on a risky text type", "WScript.Echo(1)\n", "photo.jpg.js", "txt", "mismatch"],
+  ["ordinary double extension", pad([0x1f, 0x8b, 0x08, 0x00]), "backup.tar.gz", "gzip", "match"],
+  ["dotted name that isn't a decoy", "x\n", "jquery.min.js", "txt", "match"],
 ];
 
 for (const [desc, content, name, id, status] of cases) {
@@ -94,10 +124,16 @@ for (const [desc, content, name, id, status] of cases) {
   });
 }
 
+test("revealName shows hidden bidi characters", () => {
+  assert.equal(revealName("invoice\u202Efdp.exe"), "invoice[U+202E]fdp.exe");
+  assert.equal(revealName("plain.txt"), "plain.txt");
+});
+
 test("getExtension", () => {
   assert.equal(getExtension("photo.PNG"), "png");
   assert.equal(getExtension(".bashrc"), "");
   assert.equal(getExtension("archive.tar.gz"), "gz");
   assert.equal(getExtension("noext"), "");
   assert.equal(getExtension("trailing."), "");
+  assert.equal(getExtension("perl5.34"), "");
 });
